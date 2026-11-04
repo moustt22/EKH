@@ -1,0 +1,10 @@
+.venv
+venv
+__pycache__
+.git
+.env
+frontend
+tests
+evaluation
+docs
+*.md
