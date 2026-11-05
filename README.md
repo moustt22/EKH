@@ -1,6 +1,18 @@
 # Enterprise Knowledge Hub
 
-Permission-aware knowledge app for the fictional company Northwind. People can search and ask questions only against documents they are allowed to read. The model never decides access.
+Northwind is a made-up company of about 500 people. This app is their private library.
+
+Staff sign in, look through the documents they are allowed to see, and ask questions in plain language. The answer comes from those documents and points back to the page it came from. A person in Engineering cannot read HR salary files, even if they ask for them. An HR manager cannot browse Engineering files. An administrator can see the whole library, add a file, or remove one.
+
+Someone can also share one file with a person outside their department. That extra permission can be taken away later. Every sign-in, download, and question is written down so an administrator can see who did what.
+
+The public demo is at https://frontend-iota-black-73.vercel.app. The password for every demo account is `ChangeMe123!`. Try the engineer, the HR manager, and the administrator. Each one sees a different shelf of the library.
+
+The rest of this page is for someone setting the app up.
+
+## How it is put together
+
+People can search and ask questions only against documents they are allowed to read. The model never decides access.
 
 The running pieces are:
 
