@@ -6,7 +6,16 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.documents import AccessScope, DocumentStatus, JobStatus
 from app.core.roles import RoleName
-from app.database.models import Chunk, Department, Document, DocumentGrant, DocumentVersion, IngestionJob, User
+from app.database.models import (
+    Chunk,
+    Department,
+    Document,
+    DocumentDepartment,
+    DocumentGrant,
+    DocumentVersion,
+    IngestionJob,
+    User,
+)
 from app.ingestion.files import content_hash
 from app.schemas.documents import DocumentOut
 from app.services.access import can_manage, can_read, can_upload_to
@@ -25,7 +34,10 @@ def list_documents(db: Session, user: User) -> list[Document]:
     statement = (
         select(Document)
         .where(Document.status != DocumentStatus.DELETED.value)
-        .options(selectinload(Document.department))
+        .options(
+            selectinload(Document.department),
+            selectinload(Document.departments).selectinload(DocumentDepartment.department),
+        )
         .order_by(Document.created_at.desc())
     )
     if user.role_name != RoleName.ADMINISTRATOR.value:
@@ -36,7 +48,11 @@ def list_documents(db: Session, user: User) -> list[Document]:
                 Document.id.in_(grant_ids),
                 and_(
                     Document.access_scope == AccessScope.DEPARTMENT.value,
-                    Document.department_id == user.department_id,
+                    Document.id.in_(
+                        select(DocumentDepartment.document_id).where(
+                            DocumentDepartment.department_id == user.department_id
+                        )
+                    ),
                 ),
             )
         )
@@ -45,7 +61,12 @@ def list_documents(db: Session, user: User) -> list[Document]:
 
 def get_readable_document(db: Session, user: User, document_id: uuid.UUID) -> Document:
     document = _load_document(db, document_id)
-    if not can_read(user, document, _grant_ids(db, document.id)):
+    if not can_read(
+        user,
+        document,
+        _grant_ids(db, document.id),
+        {item.department_id for item in document.departments},
+    ):
         raise DocumentServiceError(403, "Not allowed")
     return document
 
@@ -56,7 +77,8 @@ def create_document(
     user: User,
     *,
     title: str,
-    department_id: uuid.UUID,
+    department_ids: list[uuid.UUID] | None = None,
+    department_id: uuid.UUID | None = None,
     classification: str,
     access_scope: str,
     filename: str,
@@ -64,11 +86,12 @@ def create_document(
     content_type: str,
     data: bytes,
 ) -> tuple[Document, IngestionJob]:
+    department_ids = list(dict.fromkeys(department_ids or ([department_id] if department_id else [])))
     if not title.strip():
         raise DocumentServiceError(400, "A title is required")
-    if not can_upload_to(user, department_id):
+    if not department_ids or any(not can_upload_to(user, item) for item in department_ids):
         raise DocumentServiceError(403, "Not allowed")
-    if db.get(Department, department_id) is None:
+    if any(db.get(Department, item) is None for item in department_ids):
         raise DocumentServiceError(404, "Department not found")
     digest = content_hash(data)
     _reject_duplicate(db, digest)
@@ -78,7 +101,8 @@ def create_document(
         user,
         document=None,
         title=title.strip(),
-        department_id=department_id,
+        department_id=department_ids[0],
+        department_ids=department_ids,
         classification=classification,
         access_scope=access_scope,
         filename=filename,
@@ -258,6 +282,8 @@ def serialize_document(document: Document) -> DocumentOut:
         owner_id=document.owner_id,
         department_id=document.department_id,
         department_name=document.department.name,
+        department_ids=[item.department_id for item in document.departments],
+        department_names=[item.department.name for item in document.departments],
         classification=document.classification,
         access_scope=document.access_scope,
         status=document.status,
@@ -275,6 +301,7 @@ def _store_new_version(
     document: Document | None,
     title: str,
     department_id: uuid.UUID,
+    department_ids: list[uuid.UUID] | None = None,
     classification: str,
     access_scope: str,
     filename: str,
@@ -307,6 +334,11 @@ def _store_new_version(
                 updated_at=now,
             )
             db.add(document)
+            db.flush()
+            db.add_all(
+                DocumentDepartment(document_id=document.id, department_id=department_id)
+                for department_id in (department_ids or [department_id])
+            )
         else:
             document.original_filename = filename
             document.current_version = version_number
@@ -356,7 +388,10 @@ def _load_document(db: Session, document_id: uuid.UUID) -> Document:
     document = db.scalar(
         select(Document)
         .where(Document.id == document_id)
-        .options(selectinload(Document.department))
+        .options(
+            selectinload(Document.department),
+            selectinload(Document.departments).selectinload(DocumentDepartment.department),
+        )
     )
     if document is None or document.status == DocumentStatus.DELETED.value:
         raise DocumentServiceError(404, "Document not found")

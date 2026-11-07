@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.documents import DocumentStatus
 from app.core.roles import RoleName
-from app.database.models import Chunk, Document, User
+from app.database.models import Chunk, Document, DocumentDepartment, User
 from app.ingestion.chunking import sparse_term_vector
 from app.ingestion.embeddings import Embedder
 from app.schemas.search import SearchHit
@@ -54,12 +54,18 @@ def search_documents(
             select(Document)
             .where(Document.id == chunk.document_id)
             .options(selectinload(Document.department), selectinload(Document.grants))
+            .options(selectinload(Document.departments).selectinload(DocumentDepartment.department))
         )
         if document is None or document.status != DocumentStatus.ACTIVE.value:
             continue
         if chunk.version_number != document.current_version:
             continue
-        if not can_read(user, document, {grant.user_id for grant in document.grants}):
+        if not can_read(
+            user,
+            document,
+            {grant.user_id for grant in document.grants},
+            {item.department_id for item in document.departments},
+        ):
             continue
         if department_id is not None and document.department_id != department_id:
             continue
@@ -100,6 +106,8 @@ def _created_in_range(created_at: datetime, date_from: date | None, date_to: dat
 
 def _snippet(content: str) -> str:
     compact = " ".join(content.split())
-    if len(compact) <= 500:
+    # Keep enough source text for the assistant to cite facts that appear
+    # after a document's heading and metadata.
+    if len(compact) <= 2000:
         return compact
-    return compact[:497] + "..."
+    return compact[:1997] + "..."

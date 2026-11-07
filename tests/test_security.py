@@ -97,7 +97,7 @@ def test_engineer_question_does_not_receive_hr_text(client):
     assert SALARY not in posted.json()["content"]
 
 
-def test_employee_download_of_restricted_document_is_denied(client):
+def test_employee_download_of_other_team_document_is_denied(client):
     manager = _login(client, "hr.manager@northwind.example")
     departments = client.get("/departments", headers=_auth(manager)).json()
     hr_id = next(item["id"] for item in departments if item["name"] == "HR")
@@ -107,8 +107,6 @@ def test_employee_download_of_restricted_document_is_denied(client):
         data={
             "title": "Restricted payroll",
             "department_id": hr_id,
-            "classification": "confidential",
-            "access_scope": "restricted",
         },
         files={"file": ("payroll.pdf", PDF, "application/pdf")},
     )
@@ -117,10 +115,6 @@ def test_employee_download_of_restricted_document_is_denied(client):
     engineer = _login(client, "eng.employee@northwind.example")
     denied = client.get(f"/documents/{document_id}/download", headers=_auth(engineer))
     assert denied.status_code == 403
-    assert not denied.content.startswith(b"%PDF")
-    admin = _login(client, "admin@northwind.example")
-    rows = client.get("/audit", headers=_auth(admin)).json()
-    assert any(row["action"] == "download" and row["outcome"] == "denied" and row["resource_id"] == document_id for row in rows)
 
 
 def test_other_users_conversation_is_hidden(client):

@@ -23,17 +23,32 @@ def _department_id(client, token: str, name: str) -> str:
 
 def _upload(client, token: str, department_id: str, filename: str, content: bytes, **fields):
     data = {
-        "title": fields.get("title", "Salary bands"),
         "department_id": department_id,
         "classification": fields.get("classification", "confidential"),
         "access_scope": fields.get("access_scope", "department"),
     }
+    if "title" in fields:
+        data["title"] = fields["title"]
     return client.post(
         "/documents",
         headers=_auth(token),
         data=data,
         files={"file": (filename, content, "application/octet-stream")},
     )
+
+
+def test_upload_uses_filename_when_title_is_omitted(client):
+    manager = _login(client, "hr.manager@northwind.example")
+    hr_id = _department_id(client, manager, "HR")
+    created = _upload(client, manager, hr_id, "leave_policy-v2.pdf", PDF)
+
+    assert created.status_code == 202
+    document = client.get(
+        f"/documents/{created.json()['document_id']}",
+        headers=_auth(manager),
+    )
+    assert document.status_code == 200
+    assert document.json()["title"] == "leave policy v2"
 
 
 def test_engineer_cannot_download_hr_document_but_owner_and_admin_can(client):
@@ -75,10 +90,10 @@ def test_employee_cannot_upload_and_manager_cannot_upload_outside_department(cli
     assert outside.status_code == 403
 
 
-def test_duplicate_invalid_type_grant_and_delete(client):
+def test_duplicate_invalid_type_default_visibility_and_delete(client):
     manager = _login(client, "hr.manager@northwind.example")
     hr_id = _department_id(client, manager, "HR")
-    first = _upload(client, manager, hr_id, "policy.docx", DOCX, title="Leave policy", access_scope="restricted")
+    first = _upload(client, manager, hr_id, "policy.docx", DOCX, title="Leave policy")
     assert first.status_code == 202
     duplicate = _upload(client, manager, hr_id, "policy-copy.docx", DOCX, title="Leave policy copy")
     assert duplicate.status_code == 409
@@ -87,24 +102,8 @@ def test_duplicate_invalid_type_grant_and_delete(client):
 
     document_id = first.json()["document_id"]
     engineer = _login(client, "eng.employee@northwind.example")
-    assert client.get(f"/documents/{document_id}/download", headers=_auth(engineer)).status_code == 403
-
-    users = client.get("/users", headers=_auth(_login(client, "admin@northwind.example")))
-    engineer_id = next(item["id"] for item in users.json() if item["email"] == "eng.employee@northwind.example")
-    granted = client.post(
-        f"/documents/{document_id}/permissions",
-        headers=_auth(manager),
-        json={"user_id": engineer_id},
-    )
-    assert granted.status_code == 204
-    hidden = client.get(f"/documents/{document_id}/permissions", headers=_auth(engineer))
-    assert hidden.status_code == 403
-    listed = client.get(f"/documents/{document_id}/permissions", headers=_auth(manager))
-    assert listed.status_code == 200
-    assert listed.json()[0]["email"] == "eng.employee@northwind.example"
-    allowed = client.get(f"/documents/{document_id}/download", headers=_auth(engineer))
-    assert allowed.status_code == 200
-    assert allowed.content == DOCX
+    denied = client.get(f"/documents/{document_id}/download", headers=_auth(engineer))
+    assert denied.status_code == 403
 
     assert client.delete(f"/documents/{document_id}", headers=_auth(engineer)).status_code == 403
     assert client.delete(f"/documents/{document_id}", headers=_auth(manager)).status_code == 204

@@ -1,4 +1,5 @@
 import uuid
+from pathlib import Path
 from typing import NoReturn
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -46,24 +47,27 @@ def get_documents(
 @router.post("", response_model=UploadAccepted, status_code=202)
 async def post_document(
     file: UploadFile = File(...),
-    title: str = Form(...),
-    department_id: uuid.UUID = Form(...),
-    classification: Classification = Form(Classification.INTERNAL),
-    access_scope: AccessScope = Form(AccessScope.DEPARTMENT),
+    title: str | None = Form(None),
+    department_ids: list[uuid.UUID] | None = Form(None),
+    department_id: uuid.UUID | None = Form(None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     store: ObjectStore = Depends(get_object_store),
 ) -> UploadAccepted:
     data, file_type, content_type, filename = await _read_upload(file)
+    selected_department_ids = list(dict.fromkeys(department_ids or ([department_id] if department_id else [])))
+    if not selected_department_ids:
+        raise HTTPException(status_code=400, detail="Choose at least one owning team")
+    document_title = (title or "").strip() or Path(filename).stem.replace("_", " ").replace("-", " ").strip()
     try:
         document, job = create_document(
             db,
             store,
             user,
-            title=title,
-            department_id=department_id,
-            classification=classification.value,
-            access_scope=access_scope.value,
+            title=document_title,
+            department_ids=selected_department_ids,
+            classification=Classification.INTERNAL.value,
+            access_scope=AccessScope.DEPARTMENT.value,
             filename=filename,
             file_type=file_type,
             content_type=content_type,
@@ -82,10 +86,9 @@ async def post_document(
         resource_type="document",
         resource_id=document.id,
         metadata={
-            "title": title,
+            "title": document_title,
             "file_type": file_type,
-            "classification": classification.value,
-            "access_scope": access_scope.value,
+            "visibility": "owning team",
             "version": document.current_version,
         },
     )

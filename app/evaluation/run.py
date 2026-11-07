@@ -65,6 +65,8 @@ def _answer_case(case: dict) -> tuple[str, list[dict], str]:
                         ],
                     }
                 )
+            if system == ANSWER_SYSTEM and case["expect_insufficient"]:
+                return json.dumps({"answer": "", "citations": []})
             passage = case["passages"][0]
             return json.dumps(
                 {

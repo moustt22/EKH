@@ -23,8 +23,6 @@ LIBRARY = [
         "title": "Salary bands",
         "department": "HR",
         "actor": "hr",
-        "classification": "confidential",
-        "access_scope": "department",
         "filename": "salary-bands.pdf",
         "sections": [
             (
@@ -62,8 +60,6 @@ LIBRARY = [
         "title": "Leave policy",
         "department": "HR",
         "actor": "hr",
-        "classification": "internal",
-        "access_scope": "department",
         "filename": "leave-policy.pdf",
         "sections": [
             (
@@ -93,8 +89,6 @@ LIBRARY = [
         "title": "On-call guide",
         "department": "Engineering",
         "actor": "admin",
-        "classification": "internal",
-        "access_scope": "department",
         "filename": "on-call.pdf",
         "sections": [
             (
@@ -124,8 +118,6 @@ LIBRARY = [
         "title": "Office hours",
         "department": "Engineering",
         "actor": "admin",
-        "classification": "internal",
-        "access_scope": "department",
         "filename": "office-hours.pdf",
         "sections": [
             (
@@ -155,8 +147,6 @@ LIBRARY = [
         "title": "Expense policy",
         "department": "Finance",
         "actor": "admin",
-        "classification": "internal",
-        "access_scope": "department",
         "filename": "expense-policy.pdf",
         "sections": [
             (
@@ -186,8 +176,6 @@ LIBRARY = [
         "title": "Discount authority",
         "department": "Sales",
         "actor": "admin",
-        "classification": "confidential",
-        "access_scope": "department",
         "filename": "discount-authority.pdf",
         "sections": [
             (
@@ -217,8 +205,6 @@ LIBRARY = [
         "title": "Vendor intake",
         "department": "Operations",
         "actor": "admin",
-        "classification": "internal",
-        "access_scope": "department",
         "filename": "vendor-intake.pdf",
         "sections": [
             (
@@ -259,8 +245,6 @@ def main() -> None:
                 tokens[item["actor"]],
                 title=item["title"],
                 department_id=departments[item["department"]],
-                classification=item["classification"],
-                access_scope=item["access_scope"],
                 filename=item["filename"],
                 sections=item["sections"],
             )
@@ -297,8 +281,6 @@ def _replace(client: httpx.Client, token: str, **fields: object) -> dict[str, st
         data={
             "title": fields["title"],
             "department_id": fields["department_id"],
-            "classification": fields["classification"],
-            "access_scope": fields["access_scope"],
         },
         files={
             "file": (

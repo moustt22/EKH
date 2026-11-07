@@ -83,13 +83,20 @@ services:
       MINIO_REGION: ${MINIO_REGION:-}
       JWT_SECRET: ${JWT_SECRET:-change-me-before-any-shared-deployment}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      OPENROUTER_CHAT_MODEL: openrouter/free
-      OPENROUTER_EMBED_MODEL: openai/text-embedding-3-small
-      EMBED_DIM: "1536"
+      OPENROUTER_CHAT_MODEL: ${OPENROUTER_CHAT_MODEL:-google/gemini-2.5-flash-lite}
+      OPENROUTER_CHAT_FALLBACK_MODEL: ${OPENROUTER_CHAT_FALLBACK_MODEL:-}
+      OPENROUTER_TIMEOUT_SECONDS: ${OPENROUTER_TIMEOUT_SECONDS:-60}
+      OPENROUTER_MAX_RETRIES: ${OPENROUTER_MAX_RETRIES:-2}
+      OPENROUTER_EMBED_MODEL: ${OPENROUTER_EMBED_MODEL:-openai/text-embedding-3-small}
+      EMBED_DIM: ${EMBED_DIM:-1536}
       LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
       LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
       LANGSMITH_PROJECT: ekh
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-false}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10}
+      API_RATE_LIMIT: ${API_RATE_LIMIT:-60}
     ports:
       - "8000:8000"
     command: ["sh", "-c", "alembic upgrade head && python -m app.database.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
@@ -121,12 +128,19 @@ services:
       MINIO_REGION: ${MINIO_REGION:-}
       JWT_SECRET: ${JWT_SECRET:-change-me-before-any-shared-deployment}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      OPENROUTER_CHAT_MODEL: openrouter/free
-      OPENROUTER_EMBED_MODEL: openai/text-embedding-3-small
-      EMBED_DIM: "1536"
+      OPENROUTER_CHAT_MODEL: ${OPENROUTER_CHAT_MODEL:-google/gemini-2.5-flash-lite}
+      OPENROUTER_CHAT_FALLBACK_MODEL: ${OPENROUTER_CHAT_FALLBACK_MODEL:-}
+      OPENROUTER_TIMEOUT_SECONDS: ${OPENROUTER_TIMEOUT_SECONDS:-60}
+      OPENROUTER_MAX_RETRIES: ${OPENROUTER_MAX_RETRIES:-2}
+      OPENROUTER_EMBED_MODEL: ${OPENROUTER_EMBED_MODEL:-openai/text-embedding-3-small}
+      EMBED_DIM: ${EMBED_DIM:-1536}
       LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
       LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
       LANGSMITH_PROJECT: ekh
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-false}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10}
+      API_RATE_LIMIT: ${API_RATE_LIMIT:-60}
     command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=info"]
     depends_on:
       redis:

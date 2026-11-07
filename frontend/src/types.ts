@@ -4,6 +4,8 @@ export type User = {
   email: string;
   department_id: string;
   department_name: string;
+  department_ids?: string[];
+  department_names?: string[];
   role: "employee" | "department_manager" | "administrator" | string;
   is_active: boolean;
 };
@@ -57,6 +59,8 @@ export type DocumentItem = {
   owner_id: string;
   department_id: string;
   department_name: string;
+  department_ids?: string[];
+  department_names?: string[];
   classification: string;
   access_scope: string;
   status: string;

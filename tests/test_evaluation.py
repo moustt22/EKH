@@ -7,8 +7,8 @@ def test_evaluation_writes_the_three_scores(tmp_path):
     saved = (tmp_path / "latest.json").read_text(encoding="utf-8")
     assert "faithfulness" in saved
     by_id = {case["id"]: case for case in report["cases"]}
-    assert by_id["leave-days"]["faithfulness"] == 1.0
-    assert by_id["hr-salary-hidden"]["faithfulness"] == 1.0
+    assert by_id["leave-vacation-accrual"]["faithfulness"] == 1.0
+    assert by_id["salary-bands-hr"]["faithfulness"] == 1.0
     assert by_id["planted-instruction"]["faithfulness"] == 1.0
     assert "swordfish" not in by_id["planted-instruction"]["answer"]
     assert run_evaluation()["citation_accuracy"] == 1.0

@@ -56,6 +56,7 @@ def process_ingestion_job(
         db.execute(delete(Chunk).where(Chunk.document_id == document.id))
         points: list[IndexPoint] = []
         grants = [str(grant.user_id) for grant in document.grants]
+        department_ids = [str(item.department_id) for item in document.departments] or [str(document.department_id)]
         for draft, vector in zip(drafts, vectors, strict=True):
             chunk_id = uuid.uuid5(document.id, f"{job.version_number}:{draft.chunk_index}")
             db.add(
@@ -86,6 +87,7 @@ def process_ingestion_job(
                         "section": draft.section,
                         "text": draft.content,
                         "department_id": str(document.department_id),
+                        "department_ids": department_ids,
                         "access_scope": document.access_scope,
                         "allowed_user_ids": grants,
                         "classification": document.classification,

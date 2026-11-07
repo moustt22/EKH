@@ -39,6 +39,8 @@ class DocumentOut(BaseModel):
     owner_id: uuid.UUID
     department_id: uuid.UUID
     department_name: str
+    department_ids: list[uuid.UUID] = Field(default_factory=list)
+    department_names: list[str] = Field(default_factory=list)
     classification: str
     access_scope: str
     status: str

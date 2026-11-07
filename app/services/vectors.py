@@ -236,7 +236,8 @@ def _payload_matches(payload: dict, scope: SearchScope) -> bool:
         return False
     if scope.classification and payload.get("classification") != scope.classification:
         return False
-    if scope.department_filter and payload.get("department_id") != scope.department_filter:
+    department_ids = payload.get("department_ids") or [payload.get("department_id")]
+    if scope.department_filter and scope.department_filter not in department_ids:
         return False
     if scope.is_admin:
         return True
@@ -244,7 +245,7 @@ def _payload_matches(payload: dict, scope: SearchScope) -> bool:
         return True
     if scope.user_id in payload.get("allowed_user_ids", []):
         return True
-    return payload.get("access_scope") == "department" and payload.get("department_id") == scope.department_id
+    return payload.get("access_scope") == "department" and scope.department_id in department_ids
 
 
 def _qdrant_filter(scope: SearchScope):
@@ -266,7 +267,7 @@ def _qdrant_filter(scope: SearchScope):
         Filter(
             must=[
                 FieldCondition(key="access_scope", match=MatchValue(value="department")),
-                FieldCondition(key="department_id", match=MatchValue(value=scope.department_id)),
+                FieldCondition(key="department_ids", match=MatchAny(any=[scope.department_id])),
             ]
         ),
     ]

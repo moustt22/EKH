@@ -22,9 +22,22 @@ export async function api<T>(path: string, options: RequestInit = {}, token?: st
     return undefined as T;
   }
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  let data: unknown = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+  }
   if (!response.ok) {
-    const detail = data && typeof data.detail === "string" ? data.detail : "Request failed";
+    const detail =
+      typeof data === "object" &&
+      data !== null &&
+      "detail" in data &&
+      typeof data.detail === "string"
+        ? data.detail
+        : "Request failed";
     throw new ApiError(response.status, detail);
   }
   return data as T;

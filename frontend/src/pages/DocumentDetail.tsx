@@ -115,8 +115,7 @@ export function DocumentDetail() {
       </p>
       <h1>{document.title}</h1>
       <p className="muted">
-        {document.department_name} · {document.classification} · {document.access_scope} · version {document.current_version} ·{" "}
-        {document.file_type}
+        Team: {document.department_name} · version {document.current_version} · {document.file_type.toUpperCase()}
       </p>
       <div className="row">
         <span className={`badge status-${document.status}`}>{document.status}</span>

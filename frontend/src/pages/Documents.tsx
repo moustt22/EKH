@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api, ApiError } from "../api";
@@ -11,49 +11,91 @@ export function Documents() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState("");
   const [title, setTitle] = useState("");
-  const [departmentId, setDepartmentId] = useState("");
-  const [classification, setClassification] = useState("internal");
-  const [accessScope, setAccessScope] = useState("department");
+  const [departmentIds, setDepartmentIds] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const refreshSequence = useRef(0);
 
   const uploadAllowed = canUpload(user);
   const choices = user.role === "administrator" ? departments : departments.filter((item) => item.id === user.department_id);
 
   async function refresh() {
-    setDocuments(await api<DocumentItem[]>("/documents", {}, token));
+    const sequence = ++refreshSequence.current;
+    try {
+      const next = await api<DocumentItem[]>("/documents", {}, token);
+      if (sequence === refreshSequence.current) {
+        setDocuments(next);
+        setError("");
+      }
+    } catch (caught) {
+      if (sequence === refreshSequence.current) {
+        setError(messageOf(caught));
+      }
+    }
   }
 
   useEffect(() => {
-    void refresh().catch((caught) => setError(messageOf(caught)));
+    void refresh();
     void api<Department[]>("/departments", {}, token)
       .then((items) => {
         setDepartments(items);
         const own = items.find((item) => item.id === user.department_id);
-        setDepartmentId(user.role === "administrator" ? items[0]?.id ?? "" : own?.id ?? "");
+        setDepartmentIds(user.role === "administrator" ? (items[0]?.id ? [items[0].id] : []) : own?.id ? [own.id] : []);
+        setError("");
       })
       .catch((caught) => setError(messageOf(caught)));
   }, [token, user.department_id, user.role]);
 
-  async function onUpload(event: FormEvent) {
+  useEffect(() => {
+    if (!documents.some((document) => document.status === "processing")) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [documents, token]);
+
+  function onFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0] ?? null;
+    setFile(selected);
+    if (selected && !title.trim()) {
+      setTitle(selected.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim());
+    }
+  }
+
+  async function onUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     if (!file) {
       setError("Choose a PDF or DOCX file");
       return;
     }
+    if (departmentIds.length === 0) {
+      setError("Choose a department before uploading");
+      return;
+    }
     setError("");
+    setUploading(true);
     const body = new FormData();
     body.set("title", title);
-    body.set("department_id", departmentId);
-    body.set("classification", classification);
-    body.set("access_scope", accessScope);
+    for (const id of departmentIds) {
+      body.append("department_ids", id);
+    }
     body.set("file", file);
     try {
       await api("/documents", { method: "POST", body }, token);
       setTitle("");
       setFile(null);
+      const input = form.elements.namedItem("document-file");
+      if (input instanceof HTMLInputElement) {
+        input.value = "";
+      }
       await refresh();
     } catch (caught) {
       setError(messageOf(caught));
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -70,43 +112,44 @@ export function Documents() {
       {uploadAllowed ? (
         <form className="card form-grid" onSubmit={(event) => void onUpload(event)}>
           <label>
-            Title
-            <input value={title} onChange={(event) => setTitle(event.target.value)} required />
-          </label>
-          <label>
-            Department
-            <select value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
-              {choices.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Classification
-            <select value={classification} onChange={(event) => setClassification(event.target.value)}>
-              <option value="internal">internal</option>
-              <option value="confidential">confidential</option>
-            </select>
-          </label>
-          <label>
-            Access
-            <select value={accessScope} onChange={(event) => setAccessScope(event.target.value)}>
-              <option value="department">department</option>
-              <option value="restricted">restricted</option>
-            </select>
-          </label>
-          <label>
-            File
+            Document name <span className="muted">(optional)</span>
             <input
-              type="file"
-              accept=".pdf,.docx,application/pdf"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Leave blank to use the file name"
             />
           </label>
-          <button className="button" type="submit">
-            Upload
+          {user.role === "administrator" ? (
+            <label>
+              Owning teams <span className="muted">(hold Ctrl to choose more than one)</span>
+              <select
+                multiple
+                value={departmentIds}
+                onChange={(event) =>
+                  setDepartmentIds(Array.from(event.target.selectedOptions, (option) => option.value))
+                }
+              >
+                {choices.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p className="muted">This document will be available to the {user.department_name} team.</p>
+          )}
+          <label>
+            PDF or DOCX file
+            <input
+              name="document-file"
+              type="file"
+              accept=".pdf,.docx,application/pdf"
+              onChange={onFileChange}
+            />
+          </label>
+          <button className="button" type="submit" disabled={uploading || departmentIds.length === 0}>
+            {uploading ? "Uploading…" : "Upload"}
           </button>
         </form>
       ) : null}
@@ -116,7 +159,7 @@ export function Documents() {
           <tr>
             <th>Title</th>
             <th>Department</th>
-            <th>Access</th>
+            <th>Who can see it</th>
             <th>Status</th>
             <th>Version</th>
           </tr>
@@ -127,9 +170,11 @@ export function Documents() {
               <td>
                 <Link to={`/documents/${document.id}`}>{document.title}</Link>
               </td>
-              <td>{document.department_name}</td>
+              <td>{document.department_names?.join(", ") || document.department_name}</td>
               <td>
-                {document.access_scope} · {document.classification}
+                {document.access_scope === "restricted"
+                  ? "Selected people"
+                  : `${document.department_names?.join(", ") || document.department_name} team`}
               </td>
               <td>
                 <span className={`badge status-${document.status}`}>{document.status}</span>
@@ -145,5 +190,11 @@ export function Documents() {
 }
 
 function messageOf(caught: unknown): string {
-  return caught instanceof ApiError ? caught.message : "Documents could not be loaded";
+  if (caught instanceof ApiError) {
+    return caught.message;
+  }
+  if (caught instanceof Error && caught.message) {
+    return caught.message;
+  }
+  return "Documents could not be loaded. Please try again.";
 }

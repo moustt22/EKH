@@ -41,7 +41,6 @@ export function Search() {
             <div className="hit-title">
               <Link to={`/documents/${hit.document_id}`}>{hit.title}</Link>
               <span className="badge">{hit.department_name}</span>
-              <span className="badge">{hit.classification}</span>
             </div>
             <p className="muted">
               Page {hit.page}

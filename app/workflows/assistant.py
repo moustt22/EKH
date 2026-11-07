@@ -85,13 +85,17 @@ def _understand(state: AssistantState) -> AssistantState:
 
 
 def _rewrite(state: AssistantState, chat: ChatClient) -> AssistantState:
+    question = state["question"]
+    history = state.get("history", [])
+    if history and not _needs_history_rewrite(question):
+        return {"search_query": question}
     raw = chat.complete(
         [
             {"role": "system", "content": REWRITE_SYSTEM},
             {
                 "role": "user",
                 "content": json.dumps(
-                    {"history": state.get("history", []), "question": state["question"]},
+                    {"history": history, "question": question},
                     ensure_ascii=True,
                 ),
             },
@@ -101,6 +105,23 @@ def _rewrite(state: AssistantState, chat: ChatClient) -> AssistantState:
     if not isinstance(query, str) or not query.strip():
         query = state["question"]
     return {"search_query": query.strip()}
+
+
+def _needs_history_rewrite(question: str) -> bool:
+    words = question.lower().split()
+    if len(words) < 6:
+        return True
+    follow_up_markers = {
+        "also",
+        "it",
+        "same",
+        "that",
+        "these",
+        "they",
+        "this",
+        "those",
+    }
+    return bool(follow_up_markers.intersection(words)) or question.lower().startswith(("and ", "how about ", "what about "))
 
 
 def _retrieve(state: AssistantState, search: SearchFn) -> AssistantState:
@@ -127,8 +148,12 @@ def _check_relevance(state: AssistantState, chat: ChatClient) -> AssistantState:
             },
         ]
     )
+    # A malformed classifier response must fail closed. Treating it as relevant
+    # allows an ungrounded answer to reach the user.
     relevant = _parse_json(raw).get("relevant")
     if not isinstance(relevant, bool):
+        relevant = False
+    if not relevant and _has_evidence_overlap(state["question"], hits):
         relevant = True
     return {"relevant": relevant}
 
@@ -157,6 +182,9 @@ def _answer(state: AssistantState, chat: ChatClient) -> AssistantState:
 
 def _validate_citations(state: AssistantState) -> AssistantState:
     if not state.get("relevant"):
+        return {"answer": INSUFFICIENT_ANSWER, "citations": [], "insufficient": True}
+    answer = state.get("answer")
+    if not isinstance(answer, str) or not answer.strip() or _is_instruction(answer):
         return {"answer": INSUFFICIENT_ANSWER, "citations": [], "insufficient": True}
     valid: list[dict] = []
     seen: set[tuple[str, int, str]] = set()
@@ -195,7 +223,7 @@ def _validate_citations(state: AssistantState) -> AssistantState:
             break
     if not valid:
         return {"answer": INSUFFICIENT_ANSWER, "citations": [], "insufficient": True}
-    return {"answer": state.get("answer") or INSUFFICIENT_ANSWER, "citations": valid, "insufficient": False}
+    return {"answer": answer.strip(), "citations": valid, "insufficient": False}
 
 
 def _route_after_relevance(state: AssistantState) -> str:
@@ -239,3 +267,19 @@ def _normalize(text: str) -> str:
 
 def _is_instruction(text: str) -> bool:
     return _INSTRUCTION.search(text) is not None
+
+
+def _has_evidence_overlap(question: str, hits: list[dict]) -> bool:
+    question_terms = {
+        term
+        for term in re.findall(r"[a-z0-9]+", question.lower())
+        if len(term) >= 4
+    }
+    if len(question_terms) < 2:
+        return False
+    passage_terms = {
+        term
+        for hit in hits
+        for term in re.findall(r"[a-z0-9]+", str(hit.get("snippet", "")).lower())
+    }
+    return len(question_terms & passage_terms) >= 2

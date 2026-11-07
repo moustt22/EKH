@@ -88,8 +88,25 @@ class Document(Base):
     )
 
     department: Mapped[Department] = relationship()
+    departments: Mapped[list["DocumentDepartment"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
     versions: Mapped[list["DocumentVersion"]] = relationship(back_populates="document")
     grants: Mapped[list["DocumentGrant"]] = relationship(back_populates="document")
+
+
+class DocumentDepartment(Base):
+    __tablename__ = "document_departments"
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
+    )
+    department_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("departments.id", ondelete="CASCADE"), primary_key=True
+    )
+
+    document: Mapped[Document] = relationship(back_populates="departments")
+    department: Mapped[Department] = relationship()
 
 
 class DocumentVersion(Base):
